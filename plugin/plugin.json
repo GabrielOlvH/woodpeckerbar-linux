@@ -1,0 +1,14 @@
+{
+    "id": "woodpeckerBar",
+    "name": "WoodpeckerBar",
+    "description": "Woodpecker CI pipeline monitor - shows build status across repos",
+    "version": "0.1.0",
+    "author": "gabriel",
+    "type": "widget",
+    "capabilities": ["dankbar-widget", "monitoring"],
+    "component": "./WoodpeckerBarWidget.qml",
+    "icon": "rocket_launch",
+    "settings": "./WoodpeckerBarSettings.qml",
+    "requires": ["bun"],
+    "permissions": ["settings_read", "settings_write", "process", "network"]
+}

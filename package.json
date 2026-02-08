@@ -1,0 +1,12 @@
+{
+  "name": "woodpeckerbar-linux",
+  "version": "0.1.0",
+  "description": "Woodpecker CI pipeline monitor for DankBar",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
