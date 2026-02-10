@@ -25,7 +25,6 @@ PluginComponent {
     property bool hasRunning: runningCount > 0
     property bool hasFailing: failingCount > 0
 
-    // Live clock - ticks every second when builds are running
     Timer {
         interval: 1000
         running: root.hasRunning
@@ -33,7 +32,6 @@ PluginComponent {
         onTriggered: root.nowEpoch = Math.floor(Date.now() / 1000)
     }
 
-    // Adaptive fetch timer - fast when running, slow when idle
     Timer {
         id: fetchTimer
         interval: root.hasRunning ? 5000 : root.refreshInterval * 1000
@@ -92,12 +90,35 @@ PluginComponent {
         return Math.floor(diff / 86400) + "d ago"
     }
 
+    function eventLabel(event) {
+        if (event === "pull_request") return "PR"
+        if (event === "pull_request_closed") return "PR closed"
+        return event || ""
+    }
+
+    function currentStepInfo(pipeline) {
+        if (!pipeline || !pipeline.steps || pipeline.steps.length === 0) return ""
+        var completed = 0
+        var currentName = ""
+        var total = pipeline.steps.length
+        for (var i = 0; i < total; i++) {
+            if (pipeline.steps[i].state === "success") completed++
+            if (pipeline.steps[i].state === "running") currentName = pipeline.steps[i].name
+        }
+        if (currentName) return currentName + " (" + (completed + 1) + "/" + total + ")"
+        return ""
+    }
+
     function runningPipelineText() {
         for (var i = 0; i < repos.length; i++) {
             var p = repos[i].last_pipeline
             if (p && (p.status === "running" || p.status === "pending")) {
+                var step = currentStepInfo(p)
                 var elapsed = p.started > 0 ? formatDuration(root.nowEpoch - p.started) : ""
-                return repos[i].name + (elapsed ? " " + elapsed : "")
+                var parts = [repos[i].name]
+                if (step) parts.push(step)
+                if (elapsed) parts.push(elapsed)
+                return parts.join(" \u00B7 ")
             }
         }
         return ""
@@ -197,7 +218,6 @@ PluginComponent {
                         width: parent.width
                         spacing: Theme.spacingM
 
-                        // Summary header
                         Row {
                             width: parent.width
                             spacing: Theme.spacingS
@@ -229,7 +249,6 @@ PluginComponent {
                             }
                         }
 
-                        // Repos
                         Repeater {
                             model: root.repos
 
@@ -241,7 +260,6 @@ PluginComponent {
                                 property var pipeline: modelData.last_pipeline
                                 property bool isRunning: pipeline && (pipeline.status === "running" || pipeline.status === "pending")
 
-                                // Repo header
                                 Row {
                                     width: parent.width
                                     spacing: Theme.spacingS
@@ -267,13 +285,27 @@ PluginComponent {
                                                 font.weight: Font.Medium
                                             }
 
-                                            StyledText {
-                                                text: pipeline ? ("#" + pipeline.number) : ""
-                                                color: Theme.surfaceVariantText
-                                                font.pixelSize: Theme.fontSizeSmall - 2
+                                            Item {
+                                                width: buildNumText.width
+                                                height: buildNumText.height
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: !!pipeline
+
+                                                StyledText {
+                                                    id: buildNumText
+                                                    text: pipeline ? ("#" + pipeline.number) : ""
+                                                    color: Theme.primary
+                                                    font.pixelSize: Theme.fontSizeSmall - 2
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    anchors.margins: -4
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: Qt.openUrlExternally(repo.link)
+                                                }
                                             }
 
-                                            // Duration badge (live for running)
                                             StyledRect {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 width: durText.width + 8
@@ -293,7 +325,6 @@ PluginComponent {
                                             }
                                         }
 
-                                        // Commit message
                                         StyledText {
                                             width: parent.width
                                             text: pipeline ? pipeline.message : "No pipelines"
@@ -303,10 +334,46 @@ PluginComponent {
                                             maximumLineCount: 1
                                         }
 
-                                        // Meta row
+                                        // Step progress for running pipelines
+                                        Flow {
+                                            width: parent.width
+                                            spacing: 6
+                                            visible: isRunning && pipeline && pipeline.steps && pipeline.steps.length > 0
+
+                                            Repeater {
+                                                model: (pipeline && pipeline.steps) ? pipeline.steps : []
+
+                                                Row {
+                                                    spacing: 3
+
+                                                    Rectangle {
+                                                        width: 6
+                                                        height: 6
+                                                        radius: 3
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: root.statusColor(modelData.state)
+                                                    }
+
+                                                    StyledText {
+                                                        text: modelData.name
+                                                        color: modelData.state === "running" ? Theme.surfaceText : Theme.surfaceVariantText
+                                                        font.pixelSize: Theme.fontSizeSmall - 3
+                                                        font.weight: modelData.state === "running" ? Font.Medium : Font.Normal
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         Row {
                                             spacing: Theme.spacingS
                                             visible: !!pipeline
+
+                                            StyledText {
+                                                text: pipeline ? root.eventLabel(pipeline.event) : ""
+                                                color: Theme.surfaceContainerHighest
+                                                font.pixelSize: Theme.fontSizeSmall - 3
+                                                visible: text !== ""
+                                            }
 
                                             StyledText {
                                                 text: pipeline ? pipeline.branch : ""
@@ -330,7 +397,6 @@ PluginComponent {
                                     }
                                 }
 
-                                // Separator
                                 Rectangle {
                                     width: parent.width
                                     height: 1
@@ -340,7 +406,6 @@ PluginComponent {
                             }
                         }
 
-                        // No token warning
                         Column {
                             width: parent.width
                             spacing: Theme.spacingS

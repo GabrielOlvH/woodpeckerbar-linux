@@ -1,4 +1,4 @@
-import type { Pipeline, Repo } from "./types"
+import type { Pipeline, Repo, Step } from "./types"
 
 function formatDuration(startSecs: number, finishSecs: number): number {
   if (!startSecs || !finishSecs) return 0
@@ -20,7 +20,28 @@ function parsePipeline(raw: any): Pipeline | null {
     started: raw.started || 0,
     finished: raw.finished || 0,
     duration: formatDuration(raw.started, raw.finished),
+    steps: [],
   }
+}
+
+async function fetchPipelineSteps(baseUrl: string, token: string, repoId: number, pipelineNumber: number): Promise<Step[]> {
+  const res = await fetch(`${baseUrl}/api/repos/${repoId}/pipelines/${pipelineNumber}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return []
+  const raw = (await res.json()) as any
+
+  const steps: Step[] = []
+  for (const workflow of raw.workflows || []) {
+    for (const child of workflow.children || []) {
+      steps.push({
+        name: child.name || "",
+        state: child.state || "",
+        type: child.type || "",
+      })
+    }
+  }
+  return steps
 }
 
 export async function fetchRepos(baseUrl: string, token: string): Promise<Repo[]> {
@@ -30,7 +51,7 @@ export async function fetchRepos(baseUrl: string, token: string): Promise<Repo[]
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   const raw = (await res.json()) as any[]
 
-  return raw
+  const repos: Repo[] = raw
     .filter((r: any) => r.active)
     .map((r: any) => ({
       id: r.id,
@@ -38,12 +59,25 @@ export async function fetchRepos(baseUrl: string, token: string): Promise<Repo[]
       full_name: r.full_name,
       active: r.active,
       last_pipeline: parsePipeline(r.last_pipeline),
+      link: r.last_pipeline
+        ? `${baseUrl}/repos/${r.id}/pipeline/${r.last_pipeline.number}`
+        : `${baseUrl}/repos/${r.id}`,
     }))
     .sort((a, b) => {
       const aTime = a.last_pipeline?.created || 0
       const bTime = b.last_pipeline?.created || 0
       return bTime - aTime
     })
+
+  await Promise.all(
+    repos
+      .filter((r) => r.last_pipeline && (r.last_pipeline.status === "running" || r.last_pipeline.status === "pending"))
+      .map(async (r) => {
+        r.last_pipeline!.steps = await fetchPipelineSteps(baseUrl, token, r.id, r.last_pipeline!.number)
+      }),
+  )
+
+  return repos
 }
 
 export async function fetchRecentPipelines(baseUrl: string, token: string, repoId: number, count = 5): Promise<Pipeline[]> {

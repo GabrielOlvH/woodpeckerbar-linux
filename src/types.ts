@@ -1,3 +1,9 @@
+export interface Step {
+  name: string
+  state: string
+  type: string
+}
+
 export interface Pipeline {
   id: number
   number: number
@@ -11,6 +17,7 @@ export interface Pipeline {
   started: number
   finished: number
   duration: number
+  steps: Step[]
 }
 
 export interface Repo {
@@ -19,6 +26,7 @@ export interface Repo {
   full_name: string
   active: boolean
   last_pipeline: Pipeline | null
+  link: string
 }
 
 export interface WoodpeckerBarOutput {
